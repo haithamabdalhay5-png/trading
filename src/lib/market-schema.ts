@@ -26,7 +26,8 @@ const candleSchema = z
 
 const liquidityLevelSchema = z
   .object({ price: finite, swept: z.boolean() })
-  .passthrough();
+  .passthrough()
+  .nullable();
 
 const marketZoneSchema = z
   .object({
@@ -87,9 +88,9 @@ const commoditySchema = z
       .passthrough(),
     indicators: z
       .object({
-        ema20_m15: finite,
-        ema50_m15: finite,
-        ema200_h1: finite,
+        ema20_m15: nullableFinite,
+        ema50_m15: nullableFinite,
+        ema200_h1: nullableFinite,
         rsi14_m15: finite.min(0).max(100),
         rsi14_h1: finite.min(0).max(100),
         corr_dxy_h1: finite.min(-1).max(1),
@@ -98,14 +99,14 @@ const commoditySchema = z
       .passthrough(),
     microstructure_volume: z
       .object({
-        poc_level: finite,
-        va_high: finite,
-        va_low: finite,
-        daily_vwap: finite,
-        vwap_upper_1sd: finite,
-        vwap_lower_1sd: finite,
-        vwap_upper_2sd: finite,
-        vwap_lower_2sd: finite,
+        poc_level: nullableFinite,
+        va_high: nullableFinite,
+        va_low: nullableFinite,
+        daily_vwap: nullableFinite,
+        vwap_upper_1sd: nullableFinite,
+        vwap_lower_1sd: nullableFinite,
+        vwap_upper_2sd: nullableFinite,
+        vwap_lower_2sd: nullableFinite,
         vwap_slope: z.enum(["UP", "DOWN", "FLAT"]),
         synthetic_cvd_session: finite,
         synthetic_cvd_m15: finite,
@@ -119,8 +120,8 @@ const commoditySchema = z
       .passthrough(),
     liquidity_pools: z
       .object({
-        ny_midnight_open: finite,
-        ny_830_am_open: finite,
+        ny_midnight_open: nullableFinite,
+        ny_830_am_open: nullableFinite,
         pdh: liquidityLevelSchema,
         pdl: liquidityLevelSchema,
         pwh: liquidityLevelSchema,
@@ -138,7 +139,8 @@ const commoditySchema = z
     if (commodity.meta.ask < commodity.meta.bid) {
       context.addIssue({ code: "custom", path: ["meta", "ask"], message: "Ask must be greater than or equal to bid" });
     }
-    if (commodity.microstructure_volume.va_high < commodity.microstructure_volume.va_low) {
+    const { va_high: valueAreaHigh, va_low: valueAreaLow } = commodity.microstructure_volume;
+    if (valueAreaHigh !== null && valueAreaLow !== null && valueAreaHigh < valueAreaLow) {
       context.addIssue({ code: "custom", path: ["microstructure_volume", "va_high"], message: "va_high must be greater than or equal to va_low" });
     }
   });
@@ -156,9 +158,9 @@ export const marketPacketSchema = z
     target_strategy: z.string().min(1).max(64),
     intermarket: z
       .object({
-        dxy_price: finite.positive(),
-        dxy_change_pct: finite,
-        xau_xag_ratio: finite.positive(),
+        dxy_price: finite.positive().nullable(),
+        dxy_change_pct: nullableFinite,
+        xau_xag_ratio: finite.positive().nullable(),
       })
       .passthrough(),
     commodities: z.record(z.string().min(1).max(32), commoditySchema),
