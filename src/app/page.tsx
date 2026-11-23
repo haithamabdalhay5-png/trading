@@ -7,14 +7,14 @@ type Instrument = {
   bid?: number;
   ask?: number;
   spread_points?: number;
+  spread_status?: string;
   [key: string]: unknown;
 };
 
 type Snapshot = {
   packet: {
     utc_timestamp: string;
-    active_session?: string;
-    symbols: Instrument[];
+    commodities: Record<string, { meta: Instrument }>;
     [key: string]: unknown;
   };
   receivedAt: string;
@@ -90,7 +90,7 @@ export default function Home() {
     };
   }, [refresh]);
 
-  const instruments = state?.snapshot?.packet.symbols ?? [];
+  const instruments = Object.values(state?.snapshot?.packet.commodities ?? {}).map(({ meta }) => meta);
   const marketStatus = state?.snapshot ? (state.stale ? "stale" : "ready") : "empty";
 
   return (
@@ -164,7 +164,11 @@ export default function Home() {
                     <td className="ltr-number">{formatPrice(instrument.bid)}</td>
                     <td className="ltr-number">{formatPrice(instrument.ask)}</td>
                     <td className="ltr-number">{formatPrice(instrument.spread_points)}</td>
-                    <td><span className="price-status"><i /> مستلم</span></td>
+                    <td>
+                      <span className={`price-status ${instrument.spread_status === "WARNING_HIGH_SPREAD" ? "spread-warning" : ""}`}>
+                        <i /> {instrument.spread_status === "WARNING_HIGH_SPREAD" ? "سبريد مرتفع" : instrument.spread_status ?? "مستلم"}
+                      </span>
+                    </td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -192,7 +196,7 @@ export default function Home() {
           <article className="panel setup-panel">
             <div className="panel-heading compact"><div><p className="eyebrow">ما نحتاجه منك لاحقًا</p><h2>إكمال التوصيل</h2></div></div>
             <ul className="setup-list">
-              <li><span className="setup-index">1</span><span>عينة JSON حقيقية من MT5، بعد حذف الحساب/المعرّفات الخاصة.</span></li>
+              <li><span className="setup-index">1</span><span>ملف EA/Exporter بصيغة MQ5 أو جزء WebRequest لإرسال البيانات.</span></li>
               <li><span className="setup-index">2</span><span>إنشاء Upstash وSupabase وإضافة مفاتيحهما في Vercel، لا ترسلها في المحادثة.</span></li>
               <li><span className="setup-index">3</span><span>لاحقًا: مفتاح Gemini، وحدود السبريد والمخاطرة لكل أداة.</span></li>
             </ul>

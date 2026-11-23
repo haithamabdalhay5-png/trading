@@ -5,7 +5,10 @@ import {
   readLatestSnapshot,
 } from "@/lib/market-storage";
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Read a request-scoped header so Cache Components evaluates Redis at each poll,
+  // rather than prerendering the no-configuration response during the build.
+  void request.headers.get("x-request-id");
   const configured = hasUpstashConfig();
   if (!configured) {
     return NextResponse.json({

@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     {
       accepted: true,
       received_at: snapshot.receivedAt,
-      symbol_count: parsed.data.symbols.length,
+      symbol_count: Object.keys(parsed.data.commodities).length,
       history,
       warning: history === "failed" ? "LIVE_SNAPSHOT_SAVED_HISTORY_WRITE_FAILED" : undefined,
     },

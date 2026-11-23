@@ -29,13 +29,15 @@ export function hasSupabaseConfig(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-async function upstashCommand<T>(path: string): Promise<T> {
+async function upstashCommand<T>(command: "GET" | "SET", ...args: string[]): Promise<T> {
   const baseUrl = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!baseUrl || !token) throw new Error("UPSTASH_NOT_CONFIGURED");
 
-  const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const response = await fetch(baseUrl.replace(/\/+$/, ""), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify([command, ...args]),
     cache: "no-store",
     signal: AbortSignal.timeout(4_000),
   });
@@ -46,12 +48,11 @@ async function upstashCommand<T>(path: string): Promise<T> {
 }
 
 export async function storeLatestSnapshot(snapshot: StoredSnapshot): Promise<void> {
-  const value = encodeURIComponent(JSON.stringify(snapshot));
-  await upstashCommand<string>(`set/${encodeURIComponent(LATEST_KEY)}/${value}`);
+  await upstashCommand<string>("SET", LATEST_KEY, JSON.stringify(snapshot));
 }
 
 export async function readLatestSnapshot(): Promise<StoredSnapshot | null> {
-  const value = await upstashCommand<string | null>(`get/${encodeURIComponent(LATEST_KEY)}`);
+  const value = await upstashCommand<string | null>("GET", LATEST_KEY);
   if (!value) return null;
   try {
     return JSON.parse(value) as StoredSnapshot;
@@ -77,7 +78,7 @@ export async function storeHistoricalSnapshot(snapshot: StoredSnapshot): Promise
       received_at: snapshot.receivedAt,
       source_timestamp: snapshot.packet.utc_timestamp,
       schema_version: String(snapshot.packet.schema_version ?? "2.1"),
-      symbol_count: snapshot.packet.symbols.length,
+      symbol_count: Object.keys(snapshot.packet.commodities).length,
       payload: snapshot.packet,
     }),
     signal: AbortSignal.timeout(5_000),
