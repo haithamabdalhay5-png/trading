@@ -95,10 +95,18 @@ export default function Home() {
 
   useEffect(() => {
     const initialRefresh = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => void refresh(), 5_000);
+    // Poll every 10s and only while the tab is visible: each poll is a Redis command on a metered plan.
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refresh();
+    }, 10_000);
+    const onVisible = () => {
+      if (!document.hidden) void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.clearTimeout(initialRefresh);
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refresh]);
 
@@ -177,7 +185,7 @@ export default function Home() {
         <section className="panel instruments-panel">
           <div className="panel-heading">
             <div><p className="eyebrow">تغذية البيانات</p><h2>الأسعار المستلمة</h2></div>
-            <span className={`live-label ${instruments.length ? "live" : "idle"}`}><i /> {instruments.length ? "تحديث كل 5 ثوانٍ" : "لا توجد تغذية حية"}</span>
+            <span className={`live-label ${instruments.length ? "live" : "idle"}`}><i /> {instruments.length ? "تحديث كل 10 ثوانٍ" : "لا توجد تغذية حية"}</span>
           </div>
           {instruments.length ? (
             <div className="table-wrap">
