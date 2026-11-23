@@ -18,8 +18,8 @@ export function isPayloadWithinLimit(raw: string): boolean {
   return Buffer.byteLength(raw, "utf8") <= MAX_PAYLOAD_BYTES;
 }
 
-export function isAuthorizedBearer(header: string | null): boolean {
-  const expected = process.env.MT5_INGEST_TOKEN;
+export function isAuthorizedBearer(header: string | null, envName = "MT5_INGEST_TOKEN"): boolean {
+  const expected = process.env[envName];
   if (!expected || !header?.startsWith("Bearer ")) return false;
   const supplied = Buffer.from(header.slice(7));
   const configured = Buffer.from(expected);
@@ -34,7 +34,7 @@ export function hasSupabaseConfig(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-async function upstashCommand<T>(command: "GET" | "SET", ...args: string[]): Promise<T> {
+async function upstashCommand<T>(command: "GET" | "SET" | "DEL", ...args: string[]): Promise<T> {
   const baseUrl = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!baseUrl || !token) throw new Error("UPSTASH_NOT_CONFIGURED");
@@ -52,8 +52,29 @@ async function upstashCommand<T>(command: "GET" | "SET", ...args: string[]): Pro
   return body.result as T;
 }
 
-export async function storeLatestSnapshot(snapshot: StoredSnapshot): Promise<void> {
-  await upstashCommand<string>("SET", LATEST_KEY, JSON.stringify(snapshot));
+/**
+ * Stores the newest snapshot and returns the previous one in a single Redis command
+ * (SET ... GET), so the alert monitor can compare packets without extra reads.
+ */
+export async function storeLatestSnapshot(snapshot: StoredSnapshot): Promise<StoredSnapshot | null> {
+  const previous = await upstashCommand<string | null>("SET", LATEST_KEY, JSON.stringify(snapshot), "GET");
+  if (!previous) return null;
+  try {
+    return JSON.parse(previous) as StoredSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+/** SET NX EX: true only for the first caller within the window (cooldowns, once-per-outage alerts). */
+export async function acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
+  const result = await upstashCommand<string | null>("SET", key, "1", "EX", String(ttlSeconds), "NX");
+  return result === "OK";
+}
+
+/** Returns true when the key existed and was removed. */
+export async function releaseLock(key: string): Promise<boolean> {
+  return (await upstashCommand<number>("DEL", key)) > 0;
 }
 
 export async function readLatestSnapshot(): Promise<StoredSnapshot | null> {

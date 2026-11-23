@@ -72,10 +72,12 @@ export async function GET(request: Request) {
   if (!hasUpstashConfig()) return responseFor(null, baseHealth);
 
   try {
-    const [direct, cachedDrive] = await Promise.all([readLatestSnapshot(), readDriveFallbackSnapshot()]);
+    // One Redis read while MT5 is live; the Drive cache is only read during an outage.
+    const direct = await readLatestSnapshot();
     if (direct && isMt5Live(direct)) {
-      return responseFor(direct, { ...baseHealth, mt5: "connected", drive: cachedDrive ? "configured" : baseHealth.drive });
+      return responseFor(direct, { ...baseHealth, mt5: "connected", drive: baseHealth.drive === "waiting" ? "configured" : baseHealth.drive });
     }
+    const cachedDrive = await readDriveFallbackSnapshot();
 
     const fileId = getSharedDriveFileId();
     let driveSnapshot = cachedDrive;

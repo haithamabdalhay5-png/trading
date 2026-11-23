@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { marketPacketSchema } from "@/lib/market-schema";
+import { runMonitor } from "@/lib/monitor";
 import {
   hasUpstashConfig,
   isAuthorizedBearer,
@@ -69,11 +70,19 @@ export async function POST(request: Request) {
   }
 
   const snapshot = { packet: parsed.data, receivedAt: new Date().toISOString(), source: "mt5" as const };
+  let previous: Awaited<ReturnType<typeof storeLatestSnapshot>> = null;
   try {
-    await storeLatestSnapshot(snapshot);
+    previous = await storeLatestSnapshot(snapshot);
   } catch {
     return NextResponse.json({ error: "LIVE_STORAGE_FAILED", message: "Latest snapshot was not stored." }, { status: 503 });
   }
+
+  // Alerts run after the response so the EA's WebRequest never waits on Telegram.
+  after(() =>
+    runMonitor(snapshot, previous).catch((error: unknown) => {
+      console.error("[monitor] failed:", error instanceof Error ? error.message : "unknown");
+    }),
+  );
 
   // The 5-second feed lives in Redis only (the key is overwritten). Supabase is written
   // exclusively when the judge issues a verdict or a critical error occurs.
