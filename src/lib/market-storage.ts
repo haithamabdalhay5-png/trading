@@ -2,11 +2,16 @@ import { timingSafeEqual } from "node:crypto";
 import type { MarketPacket } from "@/lib/market-schema";
 
 const LATEST_KEY = "market:latest";
+const DRIVE_CACHE_KEY = "market:drive:latest";
+const DRIVE_REFRESH_KEY = "market:drive:refresh-lock";
+const DRIVE_CACHE_TTL_SECONDS = "600";
+const DRIVE_REFRESH_COOLDOWN_SECONDS = "50";
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 
 export type StoredSnapshot = {
   packet: MarketPacket;
   receivedAt: string;
+  source?: "mt5" | "drive";
 };
 
 export function isPayloadWithinLimit(raw: string): boolean {
@@ -52,7 +57,27 @@ export async function storeLatestSnapshot(snapshot: StoredSnapshot): Promise<voi
 }
 
 export async function readLatestSnapshot(): Promise<StoredSnapshot | null> {
-  const value = await upstashCommand<string | null>("GET", LATEST_KEY);
+  return readSnapshotAt(LATEST_KEY);
+}
+
+export async function storeDriveFallbackSnapshot(snapshot: StoredSnapshot): Promise<void> {
+  // Retain the last valid result for outage visibility; freshness is checked from packet.utc_timestamp.
+  await upstashCommand<string>("SET", DRIVE_CACHE_KEY, JSON.stringify(snapshot), "EX", DRIVE_CACHE_TTL_SECONDS);
+}
+
+export async function readDriveFallbackSnapshot(): Promise<StoredSnapshot | null> {
+  return readSnapshotAt(DRIVE_CACHE_KEY);
+}
+
+export async function tryAcquireDriveRefresh(): Promise<boolean> {
+  const result = await upstashCommand<string | null>(
+    "SET", DRIVE_REFRESH_KEY, "1", "EX", DRIVE_REFRESH_COOLDOWN_SECONDS, "NX",
+  );
+  return result === "OK";
+}
+
+async function readSnapshotAt(key: string): Promise<StoredSnapshot | null> {
+  const value = await upstashCommand<string | null>("GET", key);
   if (!value) return null;
   try {
     return JSON.parse(value) as StoredSnapshot;

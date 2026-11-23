@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const snapshot = { packet: parsed.data, receivedAt: new Date().toISOString() };
+  const snapshot = { packet: parsed.data, receivedAt: new Date().toISOString(), source: "mt5" as const };
   try {
     await storeLatestSnapshot(snapshot);
   } catch {

@@ -18,13 +18,14 @@ type Snapshot = {
     [key: string]: unknown;
   };
   receivedAt: string;
+  source?: "mt5" | "drive";
 };
 
 type ApiState = {
   snapshot: Snapshot | null;
   age_seconds?: number;
   stale?: boolean;
-  health: { mt5: string; redis: string; supabase: string };
+  health: { mt5: string; drive: string; redis: string; supabase: string };
   error?: string;
 };
 
@@ -74,7 +75,7 @@ export default function Home() {
       const payload = (await response.json()) as ApiState;
       setState(payload);
     } catch {
-      setState({ snapshot: null, health: { mt5: "unknown", redis: "error", supabase: "unknown" }, error: "تعذر الوصول إلى الخادم" });
+      setState({ snapshot: null, health: { mt5: "unknown", drive: "unknown", redis: "error", supabase: "unknown" }, error: "تعذر الوصول إلى الخادم" });
     } finally {
       setCheckedAt(new Date().toISOString());
       setLoading(false);
@@ -108,6 +109,7 @@ export default function Home() {
 
       <section className="health-ribbon" aria-label="صحة النظام">
         <HealthPill label="جسر MT5" status={state?.health.mt5 ?? "unknown"} />
+        <HealthPill label="نسخة Drive الاحتياطية" status={state?.health.drive ?? "unknown"} />
         <HealthPill label="Redis اللحظي" status={state?.health.redis ?? "unknown"} />
         <HealthPill label="سجل Supabase" status={state?.health.supabase ?? "unknown"} />
         <HealthPill label="محرك الذكاء الاصطناعي" status="not_configured" />
@@ -118,7 +120,7 @@ export default function Home() {
           <div>
             <p className="eyebrow">لوحة المراقبة · النسخة التأسيسية</p>
             <h1>صورة السوق</h1>
-            <p className="subheading">استقبال ومراقبة حزم MT5. لا يصدر هذا الإصدار توصيات أو ينفّذ صفقات.</p>
+            <p className="subheading">الأولوية لإرسال MT5 المباشر مع ملف Drive احتياطي. لا يصدر هذا الإصدار توصيات أو ينفّذ صفقات.</p>
           </div>
           <button className="refresh-button" onClick={() => void refresh()} disabled={loading}>
             <span className={loading ? "spinner" : "refresh-icon"} aria-hidden="true">↻</span>
@@ -132,12 +134,12 @@ export default function Home() {
             <strong className={`summary-value ${marketStatus === "ready" ? "positive" : marketStatus === "stale" ? "warning" : "muted"}`}>
               {marketStatus === "ready" ? "البيانات حديثة" : marketStatus === "stale" ? "البيانات قديمة" : "بانتظار أول حزمة"}
             </strong>
-            <small>{state?.snapshot ? `آخر استلام قبل ${state.age_seconds ?? 0} ثانية` : "يظهر آخر تحديث هنا بعد توصيل MT5 والتخزين"}</small>
+            <small>{state?.snapshot ? `آخر جلب قبل ${state.age_seconds ?? 0} ثانية` : "يظهر آخر تحديث بعد إعداد Redis وتوصيل مصدر البيانات"}</small>
           </article>
           <article className="summary-card">
-            <span className="card-label">آخر طابع زمني من MT5</span>
+            <span className="card-label">آخر طابع زمني للحزمة</span>
             <strong className="summary-value ltr-number">{formatTime(state?.snapshot?.packet.utc_timestamp)}</strong>
-            <small>مصدر الوقت: utc_timestamp · بتوقيت UTC</small>
+            <small>المصدر: {state?.snapshot?.source === "drive" ? "ملف Drive الاحتياطي" : state?.snapshot ? "MT5 مباشر" : "—"} · utc_timestamp بتوقيت UTC</small>
           </article>
           <article className="summary-card">
             <span className="card-label">الأدوات المستلمة</span>
@@ -146,7 +148,7 @@ export default function Home() {
           </article>
         </section>
 
-        {state?.error && <div className="notice notice-error" role="status">تعذر قراءة لقطة السوق: {state.error}. تحقق من إعداد Redis في بيئة الخادم.</div>}
+        {state?.error && <div className="notice notice-error" role="status">تعذر قراءة لقطة السوق: {state.error}. تحقق من Redis ومصدر Drive في بيئة الخادم.</div>}
         {state?.stale && <div className="notice notice-warn" role="status">البيانات الواردة أقدم من 90 ثانية؛ تُعرض للمراقبة فقط ولا يجوز استخدامها لاتخاذ قرار.</div>}
 
         <section className="panel instruments-panel">
@@ -177,7 +179,7 @@ export default function Home() {
             <div className="empty-state">
               <div className="empty-icon" aria-hidden="true">⌁</div>
               <h3>لا توجد لقطة سوق محفوظة بعد</h3>
-              <p>عند إعداد مفاتيح التخزين وإرسال أول طلب من MT5 ستظهر الأدوات هنا تلقائيًا.</p>
+              <p>بعد إعداد Redis وربط MT5 أو ملف Drive الاحتياطي، ستظهر الأدوات هنا تلقائيًا.</p>
               <code dir="ltr">POST /api/ingest</code>
             </div>
           )}
