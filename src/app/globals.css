@@ -41,3 +41,15 @@ button { font: inherit; }
 
 .price-status.spread-warning { color: var(--amber); }
 .price-status.spread-warning i { background: var(--amber); box-shadow: 0 0 8px #f2bc6555; }
+
+/* Connection indicator + locked recommendation button */
+.conn-chip { display: flex; align-items: center; gap: 8px; padding: 8px 11px; border: 1px solid #2a3541; border-radius: 20px; font: 11px Arial, sans-serif; letter-spacing: .3px; color: var(--muted); background: #11161e; }
+.conn-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--subtle); }
+.conn-chip.online { color: #8edbc5; border-color: #314139; }
+.conn-chip.online i { background: var(--teal); box-shadow: 0 0 9px #39d6b280; }
+.conn-chip.offline { color: var(--red); border-color: #5a2a30; background: #1c1114; animation: conn-pulse 1.4s ease-in-out infinite; }
+.conn-chip.offline i { background: var(--red); box-shadow: 0 0 9px #ff6b7480; }
+@keyframes conn-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+.heading-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.reco-button { padding: 10px 14px; border: 1px solid #2a3541; border-radius: 8px; color: #6f7b89; background: #10151c; font-size: 11px; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .conn-chip.offline { animation: none; } }

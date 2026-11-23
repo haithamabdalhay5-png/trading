@@ -5,7 +5,6 @@ import {
   isAuthorizedBearer,
   isPayloadWithinLimit,
   maxPayloadBytes,
-  storeHistoricalSnapshot,
   storeLatestSnapshot,
 } from "@/lib/market-storage";
 
@@ -76,23 +75,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "LIVE_STORAGE_FAILED", message: "Latest snapshot was not stored." }, { status: 503 });
   }
 
-  let history: "saved" | "not_configured" | "failed" = "not_configured";
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    try {
-      await storeHistoricalSnapshot(snapshot);
-      history = "saved";
-    } catch {
-      history = "failed";
-    }
-  }
-
+  // The 5-second feed lives in Redis only (the key is overwritten). Supabase is written
+  // exclusively when the judge issues a verdict or a critical error occurs.
   return NextResponse.json(
     {
       accepted: true,
       received_at: snapshot.receivedAt,
       symbol_count: Object.keys(parsed.data.commodities).length,
-      history,
-      warning: history === "failed" ? "LIVE_SNAPSHOT_SAVED_HISTORY_WRITE_FAILED" : undefined,
     },
     { status: 201 },
   );
