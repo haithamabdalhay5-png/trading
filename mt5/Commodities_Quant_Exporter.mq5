@@ -43,7 +43,10 @@ input double           Inp_GoldBasisFallback = 13.0;                   // فار
 
 input group "--- 🎯 Trading Strategy & Risk ---"
 input ENUM_TRADE_STYLE Inp_Trade_Style       = STYLE_DAYTRADE;
-input int              Inp_Max_Spread_Pts    = 35;                     // حد السبريد المسموح (بالنقاط)
+input int              Inp_Max_Spread_Gold   = 35;                     // XAU: حد السبريد (نقاط)
+input int              Inp_Max_Spread_Silver = 50;                     // XAG: حد السبريد (نقاط)
+input int              Inp_Max_Spread_Plat   = 320;                    // XPT: السبريد الطبيعي ~200-300 نقطة
+input int              Inp_Max_Spread_Pts    = 35;                     // الحد الافتراضي لأي أداة أخرى (بالنقاط)
 
 input group "--- ⚙️ Export & Webhook (Vercel / FastAPI / n8n) ---"
 input int              Inp_TimerSeconds      = 5;                      // سرعة الإرسال للداش بورد (بالثواني)
@@ -444,6 +447,16 @@ string GetQuantIndicatorsAndCorr(const string sym, int digits)
    );
 }
 
+int SpreadLimitFor(const string sym)
+{
+   string s = sym;
+   StringToUpper(s);
+   if(StringFind(s, "XAU") == 0) return Inp_Max_Spread_Gold;
+   if(StringFind(s, "XAG") == 0) return Inp_Max_Spread_Silver;
+   if(StringFind(s, "XPT") == 0) return Inp_Max_Spread_Plat;
+   return Inp_Max_Spread_Pts;
+}
+
 void GetMetaContext(const string sym, int &spread_pts, double &spread_usd, double &daily_chg,
                     string &spread_status, string &session, bool &in_killzone)
 {
@@ -451,7 +464,7 @@ void GetMetaContext(const string sym, int &spread_pts, double &spread_usd, doubl
    double ask = SymbolInfoDouble(sym, SYMBOL_ASK);
    spread_pts = (int)SymbolInfoInteger(sym, SYMBOL_SPREAD);
    spread_usd = MathMax(0.0, ask - bid);
-   spread_status = (spread_pts > Inp_Max_Spread_Pts) ? "WARNING_HIGH_SPREAD" : "NORMAL";
+   spread_status = (spread_pts > SpreadLimitFor(sym)) ? "WARNING_HIGH_SPREAD" : "NORMAL";
 
    double daily_open = iOpen(sym, PERIOD_D1, 0);
    daily_chg = (daily_open > 0.0) ? ((bid - daily_open) / daily_open) * 100.0 : 0.0;

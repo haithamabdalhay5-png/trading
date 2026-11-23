@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { MT5_LIVE_MAX_AGE_SECONDS, evaluateSpread } from "@/lib/risk-config";
 
 type Instrument = {
   symbol: string;
@@ -25,6 +26,9 @@ type ApiState = {
   snapshot: Snapshot | null;
   age_seconds?: number;
   stale?: boolean;
+  mt5_live?: boolean;
+  recommendations_locked?: boolean;
+  error_code?: string;
   health: { mt5: string; drive: string; redis: string; supabase: string };
   error?: string;
 };
@@ -75,7 +79,14 @@ export default function Home() {
       const payload = (await response.json()) as ApiState;
       setState(payload);
     } catch {
-      setState({ snapshot: null, health: { mt5: "unknown", drive: "unknown", redis: "error", supabase: "unknown" }, error: "تعذر الوصول إلى الخادم" });
+      setState({
+        snapshot: null,
+        mt5_live: false,
+        recommendations_locked: true,
+        error_code: "ERR_MT5_OFFLINE",
+        health: { mt5: "unknown", drive: "unknown", redis: "error", supabase: "unknown" },
+        error: "تعذر الوصول إلى الخادم",
+      });
     } finally {
       setCheckedAt(new Date().toISOString());
       setLoading(false);
@@ -93,6 +104,9 @@ export default function Home() {
 
   const instruments = Object.values(state?.snapshot?.packet.commodities ?? {}).map(({ meta }) => meta);
   const marketStatus = state?.snapshot ? (state.stale ? "stale" : "ready") : "empty";
+  // Before the first response arrives we do not claim an outage; afterwards a missing live feed locks recommendations.
+  const mt5Offline = state !== null && state.mt5_live !== true;
+  const lockReason = mt5Offline ? "ERR_MT5_OFFLINE" : "محرك التحليل غير مُعدّ بعد";
 
   return (
     <main className="app-shell" dir="rtl">
@@ -102,6 +116,10 @@ export default function Home() {
           <span><b>مِرصد</b><small>TRADING INTELLIGENCE</small></span>
         </a>
         <div className="topbar-meta">
+          <span className={`conn-chip ${mt5Offline ? "offline" : state ? "online" : "pending"}`} role="status">
+            <i aria-hidden="true" />
+            {mt5Offline ? "ERR_MT5_OFFLINE" : state ? "MT5 مباشر" : "جارٍ الفحص"}
+          </span>
           <span className="environment-tag"><i /> بيئة مراقبة فقط</span>
           <span className="utc-clock">UTC · {formatTime(checkedAt)}</span>
         </div>
@@ -122,10 +140,15 @@ export default function Home() {
             <h1>صورة السوق</h1>
             <p className="subheading">الأولوية لإرسال MT5 المباشر مع ملف Drive احتياطي. لا يصدر هذا الإصدار توصيات أو ينفّذ صفقات.</p>
           </div>
-          <button className="refresh-button" onClick={() => void refresh()} disabled={loading}>
-            <span className={loading ? "spinner" : "refresh-icon"} aria-hidden="true">↻</span>
-            تحديث الحالة
-          </button>
+          <div className="heading-actions">
+            <button className="reco-button" disabled title={lockReason}>
+              🔒 طلب توصية · {lockReason}
+            </button>
+            <button className="refresh-button" onClick={() => void refresh()} disabled={loading}>
+              <span className={loading ? "spinner" : "refresh-icon"} aria-hidden="true">↻</span>
+              تحديث الحالة
+            </button>
+          </div>
         </section>
 
         <section className="summary-grid" aria-label="حالة آخر حزمة">
@@ -149,7 +172,7 @@ export default function Home() {
         </section>
 
         {state?.error && <div className="notice notice-error" role="status">تعذر قراءة لقطة السوق: {state.error}. تحقق من Redis ومصدر Drive في بيئة الخادم.</div>}
-        {state?.stale && <div className="notice notice-warn" role="status">البيانات الواردة أقدم من 90 ثانية؛ تُعرض للمراقبة فقط ولا يجوز استخدامها لاتخاذ قرار.</div>}
+        {state?.stale && <div className="notice notice-warn" role="status">البيانات الواردة أقدم من الحد المسموح ({MT5_LIVE_MAX_AGE_SECONDS} ثانية للبث المباشر)؛ تُعرض للمراقبة فقط ولا يجوز استخدامها لاتخاذ قرار.</div>}
 
         <section className="panel instruments-panel">
           <div className="panel-heading">
@@ -159,20 +182,24 @@ export default function Home() {
           {instruments.length ? (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>الأداة</th><th>Bid</th><th>Ask</th><th>السبريد (نقاط)</th><th>حالة السعر</th></tr></thead>
-                <tbody>{instruments.map((instrument) => (
-                  <tr key={instrument.symbol}>
-                    <td><span className="symbol-badge">{instrument.symbol}</span></td>
-                    <td className="ltr-number">{formatPrice(instrument.bid)}</td>
-                    <td className="ltr-number">{formatPrice(instrument.ask)}</td>
-                    <td className="ltr-number">{formatPrice(instrument.spread_points)}</td>
-                    <td>
-                      <span className={`price-status ${instrument.spread_status === "WARNING_HIGH_SPREAD" ? "spread-warning" : ""}`}>
-                        <i /> {instrument.spread_status === "WARNING_HIGH_SPREAD" ? "سبريد مرتفع" : instrument.spread_status ?? "مستلم"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}</tbody>
+                <thead><tr><th>الأداة</th><th>Bid</th><th>Ask</th><th>السبريد / الحد (نقاط)</th><th>حالة السبريد</th></tr></thead>
+                <tbody>{instruments.map((instrument) => {
+                  const spread = evaluateSpread(instrument.symbol, instrument.spread_points);
+                  const vetoed = spread.level === "veto";
+                  return (
+                    <tr key={instrument.symbol}>
+                      <td><span className="symbol-badge">{instrument.symbol}</span></td>
+                      <td className="ltr-number">{formatPrice(instrument.bid)}</td>
+                      <td className="ltr-number">{formatPrice(instrument.ask)}</td>
+                      <td className="ltr-number">{formatPrice(instrument.spread_points)} / {spread.limit}</td>
+                      <td>
+                        <span className={`price-status ${vetoed ? "spread-warning" : ""}`}>
+                          <i /> {vetoed ? "سبريد مرتفع · فيتو" : "ضمن الحد"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}</tbody>
               </table>
             </div>
           ) : (

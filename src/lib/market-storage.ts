@@ -86,29 +86,4 @@ async function readSnapshotAt(key: string): Promise<StoredSnapshot | null> {
   }
 }
 
-export async function storeHistoricalSnapshot(snapshot: StoredSnapshot): Promise<void> {
-  const baseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "");
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!baseUrl || !serviceRoleKey) throw new Error("SUPABASE_NOT_CONFIGURED");
-
-  const response = await fetch(`${baseUrl}/rest/v1/market_snapshots`, {
-    method: "POST",
-    headers: {
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify({
-      received_at: snapshot.receivedAt,
-      source_timestamp: snapshot.packet.utc_timestamp,
-      schema_version: String(snapshot.packet.schema_version ?? "2.1"),
-      symbol_count: Object.keys(snapshot.packet.commodities).length,
-      payload: snapshot.packet,
-    }),
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!response.ok) throw new Error(`SUPABASE_HTTP_${response.status}`);
-}
-
 export const maxPayloadBytes = MAX_PAYLOAD_BYTES;
