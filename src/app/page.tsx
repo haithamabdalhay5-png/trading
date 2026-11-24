@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { MT5_LIVE_MAX_AGE_SECONDS, evaluateSpread } from "@/lib/risk-config";
+import MirasDashboard from "./MirasDashboard";
 
 type Instrument = {
   symbol: string;
@@ -68,7 +69,7 @@ function HealthPill({ label, status }: { label: string; status: string }) {
   );
 }
 
-export default function Home() {
+function LegacyMonitorHome() {
   const [state, setState] = useState<ApiState | null>(null);
   const [checkedAt, setCheckedAt] = useState<string>();
   const [loading, setLoading] = useState(true);
@@ -248,4 +249,8 @@ export default function Home() {
       </div>
     </main>
   );
+}
+
+export default function Home() {
+  return <MirasDashboard />;
 }

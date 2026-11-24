@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "مِرصد | منصة مراقبة التداول",
-  description: "لوحة مراقبة آمنة لتغذية بيانات MT5 وتحليل الأسواق — نسخة تأسيسية.",
+  title: "MIRAS AI | تحليل XAUUSD",
+  description: "منصة MIRAS AI التحليلية الآمنة للذهب XAUUSD بدون تنفيذ صفقات.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
