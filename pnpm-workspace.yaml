@@ -1,3 +1,6 @@
 allowBuilds:
   sharp: false
   unrs-resolver: false
+minimumReleaseAgeExclude:
+  - '@upstash/qstash@2.13.0'
+  - '@upstash/redis@1.41.1'
